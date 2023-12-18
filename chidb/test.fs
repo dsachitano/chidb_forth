@@ -22,13 +22,51 @@ assert-level 3
     assert( 1024 = )            \ expect the pageSize to be 1024
 ;
 
-: should_havePageHeader
+: pageHeader_should_match_type
     clearstack 
     1 block 0x64 + 
-
     c@
     
     assert( PGTYPE_TABLE_LEAF = )
+;
+
+\ since we initialize the page header as type PGTYPE_TABLE_LEAF
+\ that means the header doesn't have a right page pointer in the last 4
+\ bytes, so the header is really only 8 bytes long, so check that here
+: pageHeader_should_have_initialFreeOffset 
+    1 block 0x64 +      \ base addr of pageHeader
+    1 +                 \ offset for freeOffset
+    2 multiByteNum      \ 2 byte number
+    assert( 8 = )       \ should be 8
+;
+
+: pageHeader_should_have_zeroNumCells
+    1 block 0x64 +      \ base addr of pageHeader
+    3 +                 \ offset for numCells
+    2 multiByteNum      \ 2 byte number
+    assert( 0 = )       \ should be zero
+;
+
+: pageHeader_should_have_pageSizeForCellsOffset
+    1 block 0x64 +      \ base addr of pageHeader
+    5 +                 \ offset for numCells
+    2 multiByteNum      \ 2 byte number
+    assert( 1024 = )    \ should be pageSize (hardcoded here to 1024, could be `pageSize @` instead)
+;
+
+: pageHeader_should_have_zeroAtOffset7 
+    1 block 0x64 +      \ base addr of pageHeader
+    7 +                 \ offset for numCells
+    c@                  \ 1 byte number
+    assert( 0 = )       \ should be 0
+;
+
+: should_havePageHeader
+    pageHeader_should_match_type
+    pageHeader_should_have_initialFreeOffset
+    pageHeader_should_have_zeroNumCells
+    pageHeader_should_have_pageSizeForCellsOffset
+    pageHeader_should_have_zeroAtOffset7
 ;
 
 \ load a db file
