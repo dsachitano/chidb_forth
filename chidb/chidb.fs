@@ -1,6 +1,7 @@
 s" globalsAndConsts.fs" required
 s" utils.fs" required
 s" fileHeader.fs" required
+s" btreenodestruct.fs" required
 s" btreenodes.fs" required
 
 \ ChiDb implementation, part 2

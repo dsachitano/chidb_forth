@@ -69,7 +69,7 @@ assert-level 3
 : testCellOffsetArrayPtr ( nodeAddr -- )
     dup 
     0xB68D46F0 swap btree_setCellOffsetArrayPtr
-    dumpNode
+    \ dumpNode
     btree_getCellOffsetArrayPtr
     assert( 0xB68D46F0 = )
 ;
