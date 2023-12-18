@@ -229,6 +229,52 @@ s" globalsAndConsts.fs" required
     btreeNodeStructAddr writeStructRightPageToBlock
 ;
 
+\ given a current numCells and a new cellNum idx, make sure that
+\ the idx isn't outside of the current range or range + 1
+: validateCellNum ( numCells cellNum -- )
+    -
+    0 <
+    IF 
+        ." Cellnum is out of range" throw
+    ENDIF
+;
+
+\ here we need to find the target addr in the cellOffset array
+\ then "shift" all of the rest of the array forward if needed,
+\ then write the new offset into the spot for cellNum, and then
+\ update the free space offset
+: updateCellOffsetArray { newCellOffset cellNum btreeNodeAddr -- }
+
+
+    \ pre: validate that cellNum is within the numCells
+    btreeNodeAddr btree_getNumCells cellNum validateCellNum
+    
+    \ 0. find whether any cellOffset entries need to be moved to make space
+    btreeNodeAddr btree_getNumCells                 ( -- numCells )
+    cellNum                                         ( numCells -- numCells cellNum )
+    -                                               ( numCells cellNum -- cellsToShift )
+                                                    \ this is number of cells, starting at idx cellNum, to move up by 2
+    btreeNodeAddr btree_getCellOffsetArrayPtr cellNum 2 * +     ( cellsToShift -- cellsToShift addrOfCellNumIdx )
+    dup                                             ( cellsToShift addrOfCellNumIdx -- cellsToShift addrOfCellNumIdx addrOfCellNumIdx )
+    2 +                                             ( cellsToShift addrOfCellNumIdx addrOfCellNumIdx -- cellsToShift addrOfCellNumIdx addrOfCellNextIdx )
+    rot                                             ( cellsToShift addrOfCellNumIdx addrOfCellNextIdx -- addrOfCellNumIdx addrOfCellNextIdx cellsToShift )
+    2 *                                             ( addrOfCellNumIdx addrOfCellNextIdx cellsToShift -- addrOfCellNumIdx addrOfCellNextIdx bytesToShift )
+    cmove                                           ( addrOfCellNumIdx addrOfCellNextIdx bytesToShift -- )
+    update  \ Note: I hade a flush here before, and that totally messes up the buffers.
+
+
+
+    \ 1. find the location of cellOffsetArrayEntry for cellNum
+    btreeNodeAddr btree_getCellOffsetArrayPtr       ( -- cellOffsetArray )
+    cellNum 2 *                                     ( cellOffsetArray -- cellOffsetArray cellEntryOffset )
+    +                                               ( cellOffsetArray cellEntryOffset -- cellOffsetTargetAddr )
+    newCellOffset                                   ( cellOffsetTargetAddr -- cellOffsetTargetAddr newCellOffsetVal )
+    swap                                            ( cellOffsetTargetAddr newCellOffsetVal  -- newCellOffsetVal cellOffsetTargetAddr )
+    2 writeMultiByteNum                             ( newCellOffsetVal cellOffsetTargetAddr -- )
+    save-buffers
+
+;
+
 \  * Inserts a new cell into a B-Tree node at a specified position ncell.
 \  * This involves the following:
 \  *  1. Add the cell at the top of the cell area. This involves "translating"
@@ -238,6 +284,30 @@ s" globalsAndConsts.fs" required
 \  *  3. Modify the cell offset array so that all values in positions >= ncell
 \  *     are shifted one position forward in the array. Then, set the value of
 \  *     position ncell to be the offset of the newly added cell.
-: chidb_Btree_insertCell ( btreeNodeAddr cellNum cellAddr -- )
-    
+: chidb_Btree_insertCell { btreeNodeAddr cellNum cellAddr -- }
+    \ 1: get cellsOffset, then subtract by size of cell
+    btreeNodeAddr btree_getCellsOffset  ( -- cellsOffset )  
+    cellAddr tableCell_getBlockSize     ( cellsOffset -- cellsOffset cellSize )
+    -                                   ( cellsOffset cellSize -- newCellOffset )
+    dup                                 ( newCellOffset -- newCellOffset newCellOffset)
+
+    \ 1b: add the newCellOffset from above to the pageAddr
+    btreeNodeAddr btree_getPageNum block    ( newCellOffset newCellOffset -- newCellOffset newCellOffset pageAddr )
+    +                                       ( newCellOffset newCellOffset pageAddr -- newCellOffset pageCellAddrTo )
+    cellAddr 1 +                            ( newCellOffset pageCellAddrTo -- newCellOffset pageCellAddrTo cellMemAddrFrom )
+    swap                                    ( newCellOffset pageCellAddrTo cellMemAddrFrom -- newCellOffset cellMemAddrFrom pageCellAddrTo )
+    cellAddr tableCell_getBlockSize         ( newCellOffset cellMemAddrFrom pageCellAddrTo -- newCellOffset cellMemAddrFrom pageCellAddrTo cellBlockSize )
+    cmove                                   ( newCellOffset cellMemAddrFrom pageCellAddrTo cellBlockSize -- newCellOffset )
+
+    \ 2: update the cellsOffset
+    dup                                     ( newCellOffset -- newCellOffset newCellOffset)
+    btreeNodeAddr btree_setCellsOffset      ( newCellOffset newCellOffset -- newCellOffset )
+
+    \ 3: insert the new offset at pos cellNum 
+    cellNum btreeNodeAddr updateCellOffsetArray                   ( newCellOffset cellNum btreeNodeAddr --)
+
+    \ 4: incr numCells in the btreeNode
+    btreeNodeAddr btree_getNumCells 1 + btreeNodeAddr btree_setNumCells
+    btreeNodeAddr chidb_Btree_writeNode
+ 
 ;

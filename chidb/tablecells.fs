@@ -120,3 +120,9 @@ s" utils.fs" required
         9 +                             ( recordSize -- cellSize)
     ENDIF
 ;
+
+\ this is like tableCell_getSize but the size of the on-disk block,
+\ not the in-memory struct (should just be off by one, for the type)
+: tableCell_getBlockSize ( cellAddr -- blockSize )
+    tableCell_getSize 1 -
+;
