@@ -89,6 +89,8 @@ s" utils.fs" required
 : tableCell_internal_getChildPageNum ( val cellAddr -- pageNum )
     1 +             \ offset into the struct ( val offsetAddr -- )
     4 multiByteNum
+    \ NOTE: thinking here that our page nums are all off by one, so subtract 1 here
+    1 -
 ;
 
 : tableCell_setKey ( val cellAddr -- )
@@ -98,12 +100,12 @@ s" utils.fs" required
 
 : tableCell_getKey ( val cellAddr -- key)
     5 +             \ offset into the struct ( val offsetAddr -- )
-    4 multiByteNum
+    4 multiByteVarInt
 ;
 
 : tableCell_leaf_getRecordSize ( cellAddr -- recordSize)
     1 +             \ offset into the struct
-    4 multiByteNum
+    4 multiByteVarInt
 ;
 
 : tableCell_leaf_setRecordSize ( val cellAddr -- )

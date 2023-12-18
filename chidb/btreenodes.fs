@@ -14,7 +14,8 @@ s" globalsAndConsts.fs" required
 
 : btree_blockAddr ( pagenum -- blockAddr )
     dup     ( pagenum pagenum -- ) 
-    1 =     ( pagenum -- )
+    0 =     ( pagenum -- )
+    \ note: here we check for 1 as the default start page, but we should think about that as zero instead.
     IF
         block 100 +
     ELSE
@@ -386,7 +387,9 @@ s" globalsAndConsts.fs" required
 
     btreeNodeAddr btree_getPageNum              ( -- valueOfCellOffset pageNum )
     dup                                         ( -- valueOfCellOffset pageNum pageNum )
-    1 =                                         
+    \ 1 =
+    0 =    
+    \ TODO again, we need to maybe use page 0 as the starting page, not page 1 hardcoded like this                                       
     IF
         \ for page 1, the addr is blockAddr - 100 (to get us to the page addr)
         \ then add the offset
@@ -474,6 +477,7 @@ s" globalsAndConsts.fs" required
         rot                       ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr cellNum -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr cellNum bTreeCellAddr)
         chidb_Btree_getCell       ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr cellNum bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
         swap                      ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr )
+        dup 16 dump
         tableCell_getKey          ( keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr cellKey)
         2swap                     ( keyVal4Byte bTreeCellAddr btreeNodeAddr cellKey --  btreeNodeAddr cellKey keyVal4Byte bTreeCellAddr  )
         -rot                      ( btreeNodeAddr cellKey keyVal4Byte bTreeCellAddr -- btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte )
