@@ -7,6 +7,12 @@ s" utils.fs" required
 \ and https://github.com/uchicago-cs/chidb
 \
 
+\ Variables:
+\ ---------------------------------------------------------------------
+Variable pageSize
+1024 pageSize !
+
+
 \ Step 1: Opening a chidb file
 \ ---------------------------------------------------------------------
 
@@ -23,10 +29,20 @@ s" utils.fs" required
     1 buffer 15 + 0 swap c!     \ get offset 15, and then write 0 into it
 ;
 
+\ write the pageSize
+: writePageSize ( -- )
+    \ we know the offset where we'll write this 2-byte number, it's 0x10 
+    \ according to the spec
+    pageSize  @         \ (pageSize -- )    get the pageSize from var cell
+    1 buffer 0x10 +     \ (pageSize bufferOffset -- )   get the buffer addr offset by 0x10
+    2                   \ (pageSize bufferOffset buffSize -- ) it's a 2-byte number
+    writeMultiByteNum
+;
+
 \ write the fileheader
 : initializeFileHeader ( -- )
     writeSqliteFormatStr
-
+    writePageSize
 ;
 
 \ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
