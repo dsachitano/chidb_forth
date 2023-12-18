@@ -227,6 +227,7 @@ s" globalsAndConsts.fs" required
     btreeNodeStructAddr writeStructNumCellsToBlock
     btreeNodeStructAddr writeStructCellsOffsetToBlock
     btreeNodeStructAddr writeStructRightPageToBlock
+    update save-buffers
 ;
 
 \ given a current numCells and a new cellNum idx, make sure that

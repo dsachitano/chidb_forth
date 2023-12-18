@@ -46,7 +46,7 @@ s" utils.fs" required
     9 allocate        ( -- addr wior)
 
     IF
-        ." failed to allocate memory in allocateBtreeNode"
+        ." failed to allocate memory in allocateTableCellInternal"
     ENDIF      
 
     dup             ( addr -- addr addr)
@@ -56,19 +56,17 @@ s" utils.fs" required
     c!
 ;
 
-: allocateTableCellLeaf ( recordSize -- cellAddr )
-    8 +             \ add 9 bytes to whatever the record size is:
-                    \ 1 for type, 4 for recordSize, 4 for key, the rest is recordSize 
-    dup             ( memSize -- memSize memSize )
-    allocate        ( memSize -- memSize addr wior)
+\ leaf table cells should be 13 bytes: 1 for type, 4 for recordSize, 4 for key, and 4 for ptr to record data
+\ then on the page, the record data will be: (skip type byte), 4 for recordSize, 4 for key, then the record data
+: allocateTableCellLeaf ( -- cellAddr )
+    13 allocate        ( -- addr wior)
 
     IF
-        ." failed to allocate memory in allocateBtreeNode"
-    ENDIF           ( memSize addr wior -- memSize addr)
+        ." failed to allocate memory in allocateTableCellLeaf"
+    ENDIF           ( addr wior -- addr)
 
-    dup             ( memSize addr -- memSize addr addr)
-    rot             ( memSize addr addr -- addr addr memSize )
-    32 fill         ( addr addr memSize 32 -- addr)  \ initialize each byte to 0x20
+    dup             ( addr -- addr addr)
+    13 32 fill      ( addr addr 13 32 -- addr)  \ initialize each byte to 0x20
     dup             ( addr -- addr addr )
     PGTYPE_TABLE_LEAF swap  ( addr addr -- addr PGTYPE_TABLE_LEAF addr )
     c!
@@ -91,12 +89,12 @@ s" utils.fs" required
     4 multiByteNum
 ;
 
-: tableCell_internal_setKey ( val cellAddr -- )
+: tableCell_setKey ( val cellAddr -- )
     5 +             \ offset into the struct ( val offsetAddr -- )
     4 writeMultiByteNum
 ;
 
-: tableCell_internal_getKey ( val cellAddr -- key)
+: tableCell_getKey ( val cellAddr -- key)
     5 +             \ offset into the struct ( val offsetAddr -- )
     4 multiByteNum
 ;
@@ -104,6 +102,21 @@ s" utils.fs" required
 : tableCell_leaf_getRecordSize ( cellAddr -- recordSize)
     1 +             \ offset into the struct
     4 multiByteNum
+;
+
+: tableCell_leaf_setRecordSize ( val cellAddr -- )
+    1 +             \ offset into the struct
+    4 writeMultiByteNum
+;
+
+: tableCell_leaf_getRecordAddr ( cellAddr -- recordAddr)
+    9 +             \ offset into the struct
+    4 multiByteNum
+;
+
+: tableCell_leaf_setRecordAddr ( val cellAddr -- )
+    9 +             \ offset into the struct
+    4 writeMultiByteNum
 ;
 
 : tableCell_getSize ( cellAddr -- size)
@@ -114,15 +127,21 @@ s" utils.fs" required
         drop
         9
     ELSE
-        tableCell_leaf_getRecordSize    ( cellAddr -- recordSize)
-
-        \ there are 9 bytes for the leaf cell (1 type, 4 size, 4 key ) + recordSize 
-        9 +                             ( recordSize -- cellSize)
+        drop
+        13
     ENDIF
 ;
 
 \ this is like tableCell_getSize but the size of the on-disk block,
 \ not the in-memory struct (should just be off by one, for the type)
 : tableCell_getBlockSize ( cellAddr -- blockSize )
-    tableCell_getSize 1 -
+    dup                 ( cellAddr -- cellAddr cellAddr )
+    tableCell_getType   ( cellAddr cellAddr -- cellAddr type)
+    PGTYPE_TABLE_INTERNAL =
+    IF
+        drop
+        8
+    ELSE
+        tableCell_leaf_getRecordSize 8 +
+    ENDIF
 ;

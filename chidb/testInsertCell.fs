@@ -7,7 +7,7 @@ assert-level 3
 : test_insertCell { btreenodestructaddr cellAddr -- }
     \ cell with childPageNum 2, and key 1
     2 cellAddr tableCell_internal_setChildPageNum
-    1 cellAddr tableCell_internal_setKey
+    1 cellAddr tableCell_setKey
 
     btreenodestructaddr 0 cellAddr chidb_Btree_insertCell  ( btreeNodeAddr cellNum cellAddr -- )
 
@@ -24,7 +24,7 @@ assert-level 3
 : test_insertCell2 { btreenodestructaddr cellAddr -- }
     \ cell with childPageNum 3, and key 2
     3 cellAddr tableCell_internal_setChildPageNum
-    2 cellAddr tableCell_internal_setKey
+    2 cellAddr tableCell_setKey
 
     btreenodestructaddr 1 cellAddr chidb_Btree_insertCell  ( btreeNodeAddr cellNum cellAddr -- )
 
