@@ -92,11 +92,36 @@ assert-level 3
     assert( 0 = )
 ;
 
+: nodeStruct_updates_should_be_written { nodeAddr -- }
+
+    \ initially the block value should indicate 0
+    nodeAddr getBlockAddrForStruct btree_block_getNumCells
+    assert( 0 = )
+
+    \ then we should update the node in memory to 3, and block should still be 0
+    3 nodeAddr btree_setNumCells
+    nodeAddr getBlockAddrForStruct btree_block_getNumCells
+    assert( 0 = )
+
+    \ then write the struct to block
+    nodeAddr chidb_Btree_writeNode
+
+    \ after we update the block from struct, it should read as 3
+    nodeAddr getBlockAddrForStruct btree_block_getNumCells
+    assert( 3 = )
+;
+
 \ assumes the foo.db has been initialized with page 1 by the above
 : test_chidb_Btree_getNodeByPage
-    1 chidb_Btree_getNodeByPage     ( -- btreenodestructaddr )
+    1 chidb_Btree_getNodeByPage dup ( -- btreenodestructaddr btreenodestructaddr)
+    nodeStruct_should_bevalid       ( btreenodestructaddr btreenodestructaddr -- btreenodestructaddr)
+    free                            ( btreenodestructaddr -- )
+;
 
-    nodeStruct_should_bevalid
+: test_chidb_Btree_updateNodeAndWrite
+    1 chidb_Btree_getNodeByPage dup ( -- btreenodestructaddr btreenodestructaddr)
+    nodeStruct_updates_should_be_written       ( btreenodestructaddr btreenodestructaddr -- btreenodestructaddr)
+    free                            ( btreenodestructaddr -- )
 ;
 
 
@@ -256,6 +281,7 @@ create testBuf 4 allot      \ dictionary allocate a 4-byte buffer called testBuf
     clearstack test_constants
     clearstack test_chidb_Btree_open
     clearstack test_chidb_Btree_getNodeByPage
+    clearstack test_chidb_Btree_updateNodeAndWrite
     clearstack test_utils
 ;
 

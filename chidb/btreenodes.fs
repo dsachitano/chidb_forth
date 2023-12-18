@@ -58,6 +58,12 @@ s" globalsAndConsts.fs" required
     writeMultiByteNum 
 ;
 
+: writeRightPage    ( pageNum pageAddr -- )
+    8 +             ( pageNum pageNumHeaderPos -- )
+    4               ( pageNum pageNumHeaderPos 4 -- )
+    writeMultiByteNum 
+;
+
 : writePageHeader { pageType pageAddr -- pageAddr }
     pageType pageAddr   writePageType
     pageType pageAddr   initializeFreeOffset
@@ -169,7 +175,56 @@ s" globalsAndConsts.fs" required
     chidb_Btree_initEmptyNode   ( type pageNum -- )
 ;
 
+: getBlockAddrForStruct ( btreeNodeStructAddr -- blockAddr )
+    btree_getPageNum    ( btreeNodeStructAddr -- pageNum )
+    btree_blockAddr     ( pageNum -- blockAddr )
+;
+
+: writeStructPageTypeToBlock ( btreeNodeStructAddr -- )
+    dup                   ( btreeNodeStructAddr -- btreeNodeStructAddr btreeNodeStructAddr)
+    btree_getPageType     ( btreeNodeStructAddr btreeNodeStructAddr -- btreeNodeStructAddr pageType )
+    swap                  ( btreeNodeStructAddr pageType -- pageType btreeNodeStructAddr )
+    getBlockAddrForStruct ( pageType btreeNodeStructAddr -- pageType pageAddr )
+    writePageType         ( pageType pageAddr -- )
+;
+
+: writeStructFreeOffsetToBlock ( btreeNodeStructAddr -- )
+    dup                 ( btreeNodeStructAddr -- btreeNodeStructAddr btreeNodeStructAddr)
+    btree_getFreeOffset ( btreeNodeStructAddr btreeNodeStructAddr -- btreeNodeStructAddr offsetVal )
+    swap                ( btreeNodeStructAddr offsetVal -- offsetVal btreeNodeStructAddr )
+    getBlockAddrForStruct ( offsetVal btreeNodeStructAddr -- offsetVal pageAddr )
+    writeFreeOffset     ( offsetVal pageAddr -- )
+;
+
+: writeStructNumCellsToBlock ( btreeNodeStructAddr -- )
+    dup                 ( btreeNodeStructAddr -- btreeNodeStructAddr btreeNodeStructAddr )
+    btree_getNumCells   ( btreeNodeStructAddr btreeNodeStructAddr -- btreeNodeStructAddr numCells )
+    swap                ( btreeNodeStructAddr numCells -- numCells btreeNodeStructAddr )
+    getBlockAddrForStruct ( numCells btreeNodeStructAddr -- numCells pageAddr )
+    writeNumCells       ( numCells pageAddr -- )
+;
+
+: writeStructCellsOffsetToBlock ( btreeNodeStructAddr -- )
+    dup                     ( btreeNodeStructAddr -- btreeNodeStructAddr btreeNodeStructAddr )
+    btree_getCellsOffset    ( btreeNodeStructAddr btreeNodeStructAddr -- btreeNodeStructAddr cellsOffset )
+    swap                    ( btreeNodeStructAddr cellsOffset -- cellsOffset btreeNodeStructAddr )
+    getBlockAddrForStruct   ( cellsOffset btreeNodeStructAddr -- cellsOffset pageAddr )
+    writeCellsOffset        ( cellsOffset pageAddr -- )
+;
+
+: writeStructRightPageToBlock ( btreeNodeStructAddr -- )
+    dup                     ( btreeNodeStructAddr -- btreeNodeStructAddr btreeNodeStructAddr )
+    btree_getRightPage      ( btreeNodeStructAddr btreeNodeStructAddr -- btreeNodeStructAddr pageNum )
+    swap                    ( btreeNodeStructAddr pageNum -- pageNum btreeNodeStructAddr )
+    getBlockAddrForStruct   ( cellsOffset btreeNodeStructAddr -- pageNum pageAddr )
+    writeRightPage          ( pageNum pageAddr -- )
+;
+
 \ take a btree node struct and write to block
-: chidb_Btree_writeNode ( btreeNodeStructAddr -- )
-    
+: chidb_Btree_writeNode { btreeNodeStructAddr -- )
+    btreeNodeStructAddr writeStructPageTypeToBlock
+    btreeNodeStructAddr writeStructFreeOffsetToBlock
+    btreeNodeStructAddr writeStructNumCellsToBlock
+    btreeNodeStructAddr writeStructCellsOffsetToBlock
+    btreeNodeStructAddr writeStructRightPageToBlock
 ;
