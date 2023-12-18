@@ -1,3 +1,5 @@
+s" utils.fs" required
+
 \ ChiDb implementation, part 2
 \ I started this on the dell, which died, so here we go again :)
 \
