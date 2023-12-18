@@ -404,3 +404,156 @@ s" globalsAndConsts.fs" required
     btreeNodeAddr btree_getPageType     ( addInBlockOfCell -- addInBlockOfCell pageType )
     bTreeCellAddr loadCellIntoStruct
 ;
+
+\ 2a.)  if pageType is 0x05 (PGTYPE_TABLE_INTERNAL) then we'll iterate over each cell, and each cell
+\       will have a childPage and a key.  If our key is less than or equal to the pageKey, we look
+\       at the childPage.  Otherwise, we look at the rightPage.
+: btree_find_internal ( keyVal4Byte btreeNodeAddr -- keyVal4Byte childPageNum BTREE_FIND_PAGE)
+    allocateTableCellInternal   ( keyVal4Byte btreeNodeAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr)
+    dup                         ( keyVal4Byte btreeNodeAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr)
+    -rot                         ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr )
+    swap                        ( keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
+    dup                         ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr)
+    btree_getNumCells           ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr numCells)
+
+    0 ?DO
+        2dup                      ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr)
+        i                         ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr cellNum )
+        rot                       ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr cellNum -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr cellNum bTreeCellAddr)
+        chidb_Btree_getCell       ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr cellNum bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
+        swap                      ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr )
+        tableCell_getKey          ( keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr cellKey)
+        2swap                     ( keyVal4Byte bTreeCellAddr btreeNodeAddr cellKey --  btreeNodeAddr cellKey keyVal4Byte bTreeCellAddr  )
+        -rot                      ( btreeNodeAddr cellKey keyVal4Byte bTreeCellAddr -- btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte )
+        dup                       ( btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte  -- btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte keyVal4Byte )
+        rot                       ( btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte keyVal4Byte  -- btreeNodeAddr bTreeCellAddr keyVal4Byte keyVal4Byte cellKey )
+
+        \ check to see if keyVal <= cellKey.  If it is, that means we'll look up the 
+        \ childPage from the bTreeCellAddr and then break out of the LOOP early
+        <=                        
+        IF  ( -- btreeNodeAddr bTreeCellAddr keyVal4Byte)
+            -rot                  ( btreeNodeAddr bTreeCellAddr keyVal4Byte -- keyVal4Byte btreeNodeAddr bTreeCellAddr)
+            dup                   ( keyVal4Byte btreeNodeAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr)
+            tableCell_internal_getChildPageNum ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr childPageNum)
+            swap                  ( keyVal4Byte btreeNodeAddr bTreeCellAddr childPageNum -- keyVal4Byte btreeNodeAddr childPageNum bTreeCellAddr )
+            free                  ( keyVal4Byte btreeNodeAddr childPageNum bTreeCellAddr -- keyVal4Byte btreeNodeAddr childPageNum)
+            drop                  \ this is us essentially ignoring the return code from free, which indicates whether it was successful.  bad programmer.
+            nip                   ( keyVal4Byte btreeNodeAddr childPageNum -- keyVal4Byte childPageNum )
+            BTREE_FIND_PAGE       ( keyVal4Byte childPageNum  -- keyVal4Byte childPageNum BTREE_FIND_PAGE )
+            UNLOOP EXIT           \ now we break out and return
+        ELSE 
+            \ otherwise, we want to iterate on to look at the next cell
+            \ so here we just need to ensure the stack is setup for the next loop
+            \ need to look like this ( btreeNodeAddr bTreeCellAddr keyVal4Byte -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr)
+            -rot                  ( btreeNodeAddr bTreeCellAddr keyVal4Byte -- keyVal4Byte btreeNodeAddr bTreeCellAddr)
+            dup                   ( keyVal4Byte btreeNodeAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr)
+            rot                   ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
+        ENDIF
+    LOOP 
+
+    \ if we're still here after the loop, that means we need to look at the rightPage
+    btree_getRightPage            ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr rightPageNum)
+    -rot                          ( keyVal4Byte bTreeCellAddr bTreeCellAddr rightPageNum -- keyVal4Byte rightPageNum bTreeCellAddr bTreeCellAddr)
+    drop                          ( keyVal4Byte rightPageNum bTreeCellAddr bTreeCellAddr -- keyVal4Byte rightPageNum bTreeCellAddr )
+    free                          ( keyVal4Byte rightPageNum bTreeCellAddr -- keyVal4Byte rightPageNum )
+    drop                          \ this is us essentially ignoring the return code from free, which indicates whether it was successful.  bad programmer.
+    BTREE_FIND_PAGE               ( keyVal4Byte rightPageNum -- keyVal4Byte rightPageNum BTREE_FIND_PAGE )
+;
+
+: btree_find_leaf ( keyVal4Byte btreeNodeAddr -- dataAddr dataSize2Byte BTREE_FIND_OK) 
+    allocateTableCellLeaf       ( keyVal4Byte btreeNodeAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr)
+    dup                         ( keyVal4Byte btreeNodeAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr)
+    -rot                        ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr )
+    swap                        ( keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
+    dup                         ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr)
+    btree_getNumCells           ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr numCells)
+
+    0 ?DO
+        2dup                      ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr)
+        i                         ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr cellNum )
+        rot                       ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr bTreeCellAddr btreeNodeAddr cellNum -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr cellNum bTreeCellAddr)
+        chidb_Btree_getCell       ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr btreeNodeAddr cellNum bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
+        swap                      ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr )
+        tableCell_getKey          ( keyVal4Byte bTreeCellAddr btreeNodeAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr btreeNodeAddr cellKey)
+        2swap                     ( keyVal4Byte bTreeCellAddr btreeNodeAddr cellKey --  btreeNodeAddr cellKey keyVal4Byte bTreeCellAddr  )
+        -rot                      ( btreeNodeAddr cellKey keyVal4Byte bTreeCellAddr -- btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte )
+        dup                       ( btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte  -- btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte keyVal4Byte )
+        rot                       ( btreeNodeAddr bTreeCellAddr cellKey keyVal4Byte keyVal4Byte  -- btreeNodeAddr bTreeCellAddr keyVal4Byte keyVal4Byte cellKey )
+
+        \ check to see if keyVal == cellKey.  If it is, that means we'll look up the 
+        \ record addr and size from the bTreeCellAddr and then break out of the LOOP early
+        =                        
+        IF  ( -- btreeNodeAddr bTreeCellAddr keyVal4Byte) 
+            -rot                  ( btreeNodeAddr bTreeCellAddr keyVal4Byte -- keyVal4Byte btreeNodeAddr bTreeCellAddr)
+            dup dup               ( keyVal4Byte btreeNodeAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr bTreeCellAddr)
+            tableCell_leaf_getRecordAddr ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr dataAddr)
+            -rot                  ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr dataAddr -- keyVal4Byte btreeNodeAddr dataAddr bTreeCellAddr bTreeCellAddr)
+            tableCell_leaf_getRecordSize ( keyVal4Byte btreeNodeAddr dataAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr dataAddr bTreeCellAddr dataSize4byte )
+            swap                  ( keyVal4Byte btreeNodeAddr dataAddr bTreeCellAddr dataSize4byte -- keyVal4Byte btreeNodeAddr dataAddr dataSize4byte bTreeCellAddr )
+            free                  ( keyVal4Byte btreeNodeAddr dataAddr dataSize4byte bTreeCellAddr -- keyVal4Byte btreeNodeAddr dataAddr dataSize4byte )
+            drop                  \ this is us essentially ignoring the return code from free, which indicates whether it was successful.  bad programmer.
+            rot                   ( keyVal4Byte btreeNodeAddr dataAddr dataSize4byte -- keyVal4Byte dataAddr dataSize4byte btreeNodeAddr )
+            drop                  ( keyVal4Byte dataAddr dataSize4byte btreeNodeAddr -- keyVal4Byte dataAddr dataSize4byte )
+            rot                   ( keyVal4Byte dataAddr dataSize4byte -- dataAddr dataSize4byte keyVal4Byte)
+            drop                  ( dataAddr dataSize4byte keyVal4Byte -- dataAddr dataSize4byte )
+            BTREE_FIND_OK         ( dataAddr dataSize4byte  -- dataAddr dataSize4byte BTREE_FIND_OK )
+            UNLOOP EXIT           \ now we break out and return
+        ELSE 
+            \ otherwise, we want to iterate on to look at the next cell
+            \ so here we just need to ensure the stack is setup for the next loop
+            \ need to look like this ( btreeNodeAddr bTreeCellAddr keyVal4Byte -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr)
+            -rot                  ( btreeNodeAddr bTreeCellAddr keyVal4Byte -- keyVal4Byte btreeNodeAddr bTreeCellAddr)
+            dup                   ( keyVal4Byte btreeNodeAddr bTreeCellAddr -- keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr)
+            rot                   ( keyVal4Byte btreeNodeAddr bTreeCellAddr bTreeCellAddr -- keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr )
+        ENDIF
+    LOOP 
+
+    \ if we get here, ther was no match 
+    2drop 2drop ( keyVal4Byte bTreeCellAddr bTreeCellAddr btreeNodeAddr -- )
+    0 0 BTREE_FIND_MISSING (  -- 0 0 BTREE_FIND_MISSING )
+;
+
+\ Step 5: Finding a value in a B-Tree
+\ ---------------------------------------------------------------------
+\ int chidb_Btree_find(BTree *bt, npage_t nroot, key_t key, uint8_t **data, uint16_t *size);
+
+\ for this implementation, we'll have a main return code, and then
+\ different other stack params depending on the code:
+\ 1) when we determine that we need to look in a childPage.  BTREE_FIND_PAGE is the code
+\ to indicate this, and we'll put the childPageNum on the stack too, so that we can 
+\ then simply call chidb_Btree_find again but this time with the childPage but the same search key.  So then
+\ really we'd be calling this in a loop until our return value is > BTREE_FIND_PAGE 
+\ ( keyVal4Byte pageNum -- keyVal4Byte pageNum BTREE_FIND_PAGE ) 
+\
+\ 2) when we find the value, we'll return BTREE_FIND_OK and then the dataAddr and dataSize
+\    ( keyVal4Byte pageNum -- dataAddr dataSize2Byte BTREE_FIND_OK ) 
+\ 3) when no match is found, we return BTREE_FIND_MISSING with nothing else
+\    ( keyVal4Byte pageNum -- BTREE_FIND_MISSING ) 
+: _internal_Btree_find ( keyVal4Byte pageNum -- dataAddr dataSize2Byte ) 
+    \ 1.) get the node from the pageNum with chidb_Btree_getNodeByPage (pagenum -- btreeNodeAddr)
+    chidb_Btree_getNodeByPage   ( keyVal4Byte pageNum -- keyVal4Byte btreeNodeAddr)
+
+    \ 2.) check the pageType with btree_getPageType ( btreeAddr -- pageType )
+    dup                                 ( keyVal4Byte btreeNodeAddr -- keyVal4Byte btreeNodeAddr btreeNodeAddr)
+    btree_getPageType                   ( keyVal4Byte btreeNodeAddr btreeNodeAddr -- keyVal4Byte btreeNodeAddr pageType )
+    
+    PGTYPE_TABLE_INTERNAL =             ( keyVal4Byte btreeNodeAddr pageType -- keyVal4Byte btreeNodeAddr )
+    IF
+        btree_find_internal             ( keyVal4Byte btreeNodeAddr -- keyVal4Byte childPageNum BTREE_FIND_PAGE) 
+    ELSE
+        \ TODO: should be a case, not an if/else 
+        btree_find_leaf
+    ENDIF
+    \ 2b.) if the pageType is 0x0d (PGTYPE_TABLE_LEAF) then we'll iterate over the celloffset values, 
+    \      which should be sorted, and loop until we match the key or find nothing.
+    \       2b-1.) then look at the page header, and get the number of cells btree_getNumCells ( btreeAddr -- numCells )
+    \       2b-2.) iterate numCells times through a loop, where for each value we look in the 
+    \              cells offset array (via btree_getCellsOffset) and it will then give us the offset 
+;
+
+: chidb_Btree_find ( keyVal4Byte pageNum -- dataAddr dataSize2Byte ) 
+    BEGIN
+        _internal_Btree_find            ( keyVal4Byte pageNum -- xx xx OUTCOME )
+        BTREE_FIND_PAGE >               ( xx xx OUTCOME -- xx xx )
+    UNTIL
+;
