@@ -3,6 +3,7 @@ s" utils.fs" required
 s" fileHeader.fs" required
 s" btreenodestruct.fs" required
 s" btreenodes.fs" required
+s" tablecells.fs" required 
 
 \ ChiDb implementation, part 2
 \ I started this on the dell, which died, so here we go again :)
