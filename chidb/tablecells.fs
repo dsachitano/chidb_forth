@@ -77,7 +77,9 @@ s" utils.fs" required
     c@
 ;
 
-
+: tableCell_setType ( type cellAddr -- type)
+    c!
+;
 
 : tableCell_internal_setChildPageNum ( val cellAddr -- )
     1 +             \ offset into the struct ( val offsetAddr -- )

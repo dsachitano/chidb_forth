@@ -226,8 +226,13 @@ s" globalsAndConsts.fs" required
     btreeNodeStructAddr writeStructFreeOffsetToBlock
     btreeNodeStructAddr writeStructNumCellsToBlock
     btreeNodeStructAddr writeStructCellsOffsetToBlock
-    btreeNodeStructAddr writeStructRightPageToBlock
+    btreeNodeStructAddr btree_getPageType
+    PGTYPE_TABLE_INTERNAL =
+    IF
+        btreeNodeStructAddr writeStructRightPageToBlock
+    ENDIF 
     update save-buffers
+    \ save-buffers
 ;
 
 \ given a current numCells and a new cellNum idx, make sure that
@@ -261,7 +266,7 @@ s" globalsAndConsts.fs" required
     rot                                             ( cellsToShift addrOfCellNumIdx addrOfCellNextIdx -- addrOfCellNumIdx addrOfCellNextIdx cellsToShift )
     2 *                                             ( addrOfCellNumIdx addrOfCellNextIdx cellsToShift -- addrOfCellNumIdx addrOfCellNextIdx bytesToShift )
     cmove                                           ( addrOfCellNumIdx addrOfCellNextIdx bytesToShift -- )
-    update  \ Note: I hade a flush here before, and that totally messes up the buffers.
+    update \ Note: I hade a flush here before, and that totally messes up the buffers.
 
 
 
@@ -272,8 +277,9 @@ s" globalsAndConsts.fs" required
     newCellOffset                                   ( cellOffsetTargetAddr -- cellOffsetTargetAddr newCellOffsetVal )
     swap                                            ( cellOffsetTargetAddr newCellOffsetVal  -- newCellOffsetVal cellOffsetTargetAddr )
     2 writeMultiByteNum                             ( newCellOffsetVal cellOffsetTargetAddr -- )
-    save-buffers
+    update save-buffers
 
+    \ ." in updateCellOffsetArray: " btreeNodeAddr btree_getCellOffsetArrayPtr 8 dump
 ;
 
 \  * Inserts a new cell into a B-Tree node at a specified position ncell.
@@ -297,8 +303,31 @@ s" globalsAndConsts.fs" required
     +                                       ( newCellOffset newCellOffset pageAddr -- newCellOffset pageCellAddrTo )
     cellAddr 1 +                            ( newCellOffset pageCellAddrTo -- newCellOffset pageCellAddrTo cellMemAddrFrom )
     swap                                    ( newCellOffset pageCellAddrTo cellMemAddrFrom -- newCellOffset cellMemAddrFrom pageCellAddrTo )
-    cellAddr tableCell_getBlockSize         ( newCellOffset cellMemAddrFrom pageCellAddrTo -- newCellOffset cellMemAddrFrom pageCellAddrTo cellBlockSize )
-    cmove                                   ( newCellOffset cellMemAddrFrom pageCellAddrTo cellBlockSize -- newCellOffset )
+
+    \ now we'll copy over 8 bytes from the in-mem struct to the page
+    \ since regadless of type, we always have the first 8 bytes identical
+    \ between in-memory struct and on-page layout.  After this, we'll need
+    \ to do some extra work if it's a leaf node: we need to get the record size,
+    \ and the record addr, and then write recordSize bytes from the recordAddr into 
+    \ the end of what we just wrote
+    8                                       ( newCellOffset cellMemAddrFrom pageCellAddrTo -- newCellOffset cellMemAddrFrom pageCellAddrTo 8 )
+    cmove                                   ( newCellOffset cellMemAddrFrom pageCellAddrTo 8 -- newCellOffset )
+
+    dup                                     ( newCellOffset -- newCellOffset newCellOffset )
+    btreeNodeAddr btree_getPageType         ( newCellOffset newCellOffset -- newCellOffset newCellOffset pageType )
+    PGTYPE_TABLE_LEAF = 
+    IF
+        ( newCellOffset newCellOffset -- )
+        cellAddr tableCell_leaf_getRecordAddr  ( newCellOffset newCellOffset -- newCellOffset newCellOffset recordFromAddr )
+        swap                                ( newCellOffset newCellOffset recordFromAddr -- newCellOffset recordFromAddr newCellOffset)
+        8 +                                 ( newCellOffset recordFromAddr newCellOffset -- newCellOffset recordFromAddr blockRecordAddr )
+        btreeNodeAddr btree_getPageNum block ( newCellOffset recordFromAddr blockRecordAddr -- newCellOffset recordFromAddr blockRecordAddr pageAddr )
+        +                                   ( newCellOffset recordFromAddr blockRecordAddr pageAddr -- newCellOffset recordFromAddr blockRecordPageAddr )
+        cellAddr tableCell_leaf_getRecordSize ( newCellOffset recordFromAddr blockRecordPageAddr -- newCellOffset recordFromAddr blockRecordPageAddr recordSize )
+        cmove                               ( newCellOffset recordFromAddr blockRecordPageAddr recordSize  -- newCellOffset )
+    ELSE
+        drop                                ( newCellOffset newCellOffset -- newCellOffset )
+    ENDIF 
 
     \ 2: update the cellsOffset
     dup                                     ( newCellOffset -- newCellOffset newCellOffset)
@@ -311,4 +340,73 @@ s" globalsAndConsts.fs" required
     btreeNodeAddr btree_getNumCells 1 + btreeNodeAddr btree_setNumCells
     btreeNodeAddr chidb_Btree_writeNode
  
+;
+
+: loadCellIntoStruct { addrInBlockOfCell pageType bTreeCellAddr -- }
+    \ write the page type into the cell struct type (1 byte)
+    pageType bTreeCellAddr tableCell_setType
+
+    \ the first 8 bytes of the cell should be the same always, regardless of type
+    \ and then if it's a leaf, we need to write 4 more bytes as pointer to the record
+    addrInBlockOfCell bTreeCellAddr 1 + 8 cmove 
+
+    pageType PGTYPE_TABLE_LEAF = 
+    IF
+        addrInBlockOfCell 8 +   ( -- addrInPageOfDBRecord )
+        bTreeCellAddr 9 +       ( -- addrInPageOfDBRecord recordPtrInStruct )
+        4 writeMultiByteNum
+    ENDIF
+;
+
+\ /* Read the contents of a cell
+\  *
+\  * Reads the contents of a cell from a BTreeNode and stores them in a BTreeCell.
+\  * This involves the following:
+\  *  1. Find out the offset of the requested cell.
+\  *  2. Read the cell from the in-memory page, and parse its
+\  *     contents (refer to The chidb File Format document for
+\  *     the format of cells).
+\  *
+\  * Parameters
+\  * - btn: BTreeNode where cell is contained
+\  * - ncell: Cell number
+\  * - cell: BTreeCell where contents must be stored.
+\  *
+\  * Return
+\  * - CHIDB_OK: Operation successful
+\  * - CHIDB_ECELLNO: The provided cell number is invalid
+\  */
+: chidb_Btree_getCell { btreeNodeAddr cellNum bTreeCellAddr -- }
+    \ 1. get the address of the cell.  First, find the cellOffsets array, then lookup cellNum in it.
+    \    then the value should be an offset from the start of the page, which we use to compute the
+    \    address of the cell data.
+    btreeNodeAddr btree_getCellOffsetArrayPtr   ( -- cellOffsetArrayBase )
+    cellNum 2 *                                 ( -- cellOffsetArrayBase cellIdx ) \ 2 bytes per entry
+    +                                           ( -- cellOffsetEntryAddr )
+    2 multiByteNum                              ( -- valueOfCellOffset )
+
+    \ dup ." we got the cellOffset: " hex. cr 
+
+    btreeNodeAddr btree_getPageNum              ( -- valueOfCellOffset pageNum )
+    dup                                         ( -- valueOfCellOffset pageNum pageNum )
+    1 =                                         
+    IF
+        \ for page 1, the addr is blockAddr - 100 (to get us to the page addr)
+        \ then add the offset
+        btree_blockAddr                             ( valueOfCellOffset pagenum -- valueOfCellOffset blockAddr )
+        100 -
+        +
+    ELSE
+        \ for page > 1, the addr is just blockAddr plus offset
+        btree_blockAddr + 
+    ENDIF
+
+    ( -- addrInBlockOfCell )
+    \ 8 dump
+
+
+    \ 2. load the contents of the cell from the page into the bTreeCellAddr
+    btreeNodeAddr btree_getPageType     ( addInBlockOfCell -- addInBlockOfCell pageType )
+    \ dup ." Page Type Is: " hex. cr
+    bTreeCellAddr loadCellIntoStruct
 ;
