@@ -22,13 +22,25 @@ assert-level 3
     assert( 1024 = )            \ expect the pageSize to be 1024
 ;
 
+: should_havePageHeader
+    clearstack 
+    1 block 0x64 + 
+
+    c@
+    
+    assert( PGTYPE_TABLE_LEAF = )
+;
+
 \ load a db file
 : test_chidb_Btree_open
     s" foo.db" chidb_Btree_open
 
+    clearstack 
+
     should_fileHeaderFmtString
     should_formatStrNullTerminated
     should_havePageSize1024
+    should_havePageHeader
 ;
 
 create testBuf 4 allot      \ dictionary allocate a 4-byte buffer called testBuf
@@ -176,9 +188,17 @@ create testBuf 4 allot      \ dictionary allocate a 4-byte buffer called testBuf
     should_roundTrip_multiByte
 ;
 
+: test_constants
+    assert( PGTYPE_TABLE_INTERNAL 0x05 = )
+    assert( 0x0D PGTYPE_TABLE_LEAF = )
+    assert( 0x02 PGTYPE_INDEX_INTERNAL = )
+    assert( 0x0A PGTYPE_INDEX_LEAF = )
+;
+
 : allTests
-    test_chidb_Btree_open
-    test_utils
+    clearstack test_constants
+    clearstack test_chidb_Btree_open
+    clearstack test_utils
 ;
 
 allTests
