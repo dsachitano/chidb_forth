@@ -14,8 +14,17 @@
       \ TODO: actually check the block for a file header in the first 100 bytes 
 ;
 
+: writeSqliteFormatStr ( -- )
+    s" SQLite format 3" 1 buffer swap    \ produces (straddr blockaddr strlen -- )
+    chars move  \ ( -- ) writes the string to 1 block at index 0
+
+    1 buffer 15 + 0 swap c!     \ get offset 15, and then write 0 into it
+;
+
 \ write the fileheader
 : initializeFileHeader ( -- )
+    writeSqliteFormatStr
+
 ;
 
 \ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
@@ -28,6 +37,8 @@
     IF
         initializeFileHeader
     ENDIF
+
+    update flush
 ;
 
 \ int chidb_Btree_close(BTree *bt);
