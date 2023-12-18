@@ -51,6 +51,21 @@ assert-level 3
     assert( 1024 48 - = )
 ;
 
+: validateInsertedCell { cellAddr -- }
+    cellAddr tableCell_getType 
+    assert( PGTYPE_TABLE_LEAF = )
+
+    cellAddr tableCell_getKey
+    assert( 2 = )
+
+    cellAddr tableCell_leaf_getRecordSize
+    assert( 16 = )
+
+    cellAddr tableCell_leaf_getRecordAddr
+    4 multiByteNum
+    assert( 0x3D3D3D3D = )
+;
+
 : test_getCell { btreenodestructaddr -- }
 
     btreenodestructaddr     ( -- btreenodestructaddr)
@@ -65,7 +80,41 @@ assert-level 3
 
         \ 13 dump 
 
-    free 
+    validateInsertedCell
+
+    free drop 
+;
+
+: test_insertCell3 { btreenodestructaddr cellAddr -- }
+
+    3 cellAddr tableCell_setKey
+    16 cellAddr tableCell_leaf_setRecordSize
+    16 allocate drop dup 16 45 fill  \ initialize the record to 61 in each byte (0x2D)
+    cellAddr tableCell_leaf_setRecordAddr
+
+    btreenodestructaddr 1 cellAddr chidb_Btree_insertCell  ( btreeNodeAddr cellNum cellAddr -- )
+
+    btreenodestructaddr chidb_Btree_writeNode
+
+    \ validate numCells
+    btreenodestructaddr btree_getNumCells
+    assert( 3 = )
+
+    btreenodestructaddr btree_getCellsOffset
+    assert( 1024 72 - = )
+
+    \ debug
+    \ 1 block 100 + 1024 100 - dump
+
+    \ lookup the cellOffset array, and since we inserted at indexes
+    \ 0, 1, 1, then idx 0 should be the end-most, idx 1 should be
+    \ the *newest* (3 in from the end), and idx 2 should be the 2nd
+    \ one we inserted 48 in from the end
+    btreenodestructaddr btree_getCellOffsetArrayPtr
+    dup 2 multiByteNum assert( 1024 24 - = )
+    dup 2 + 2 multiByteNum assert( 1024 24 3 * - = )
+    dup 4 + 2 multiByteNum assert( 1024 24 2 * - = )
+    drop 
 ;
 
 : runTest 
@@ -82,6 +131,10 @@ assert-level 3
 
     dup                                     ( btreenodestructaddr -- btreenodestructaddr btreenodestructaddr )
     test_getCell                            ( btreenodestructaddr btreenodestructaddr -- btreenodestructaddr )
+
+    dup                                     ( btreenodestructaddr -- btreenodestructaddr btreenodestructaddr )
+    allocateTableCellLeaf                   ( btreenodestructaddr btreenodestructaddr -- btreenodestructaddr btreenodestructaddr cellAddr )
+    test_insertCell3                        ( btreenodestructaddr btreenodestructaddr cellAddr -- btreenodestructaddr )
 
     free
 ;
