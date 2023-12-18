@@ -81,6 +81,25 @@ assert-level 3
     should_havePageHeader
 ;
 
+: nodeStruct_should_bevalid { nodeAddr -- 
+    nodeAddr btree_getPageNum
+    assert( 1 = )
+
+    nodeAddr btree_getPageType
+    assert( PGTYPE_TABLE_LEAF = )
+
+    nodeAddr btree_getNumCells
+    assert( 0 = )
+;
+
+\ assumes the foo.db has been initialized with page 1 by the above
+: test_chidb_Btree_getNodeByPage
+    1 chidb_Btree_getNodeByPage     ( -- btreenodestructaddr )
+
+    nodeStruct_should_bevalid
+;
+
+
 create testBuf 4 allot      \ dictionary allocate a 4-byte buffer called testBuf
 
 : should_multiByteNum_addsUp
@@ -236,6 +255,7 @@ create testBuf 4 allot      \ dictionary allocate a 4-byte buffer called testBuf
 : allTests
     clearstack test_constants
     clearstack test_chidb_Btree_open
+    clearstack test_chidb_Btree_getNodeByPage
     clearstack test_utils
 ;
 

@@ -1,3 +1,5 @@
+s" globalsAndConsts.fs" required
+
 \ 
 \ Step 2: Loading a B-Tree node from the file
 \ ---------------------------------------------------------------------
@@ -101,7 +103,7 @@
     ENDIF
 ;
 
-: loadBlockIntoStruct { structAddr blockAddr pageNum -- )
+: loadBlockIntoStruct { structAddr blockAddr pageNum -- structAddr)
 
     \ pageNum
     pageNum structAddr btree_setPageNum
@@ -134,14 +136,13 @@
     blockAddr btree_block_getCellOffsetArray
     structAddr btree_setCellOffsetArrayPtr
 
-    ." SHOULD HAVE STRUCT NOW " cr 
-    structAddr dumpNode
+    structAddr 
 ;
 
 \ here we'll take the address of a block buffer for the node
 \ and then allocate a new btree node struct, and load it with
 \ the data from the block on disk, and return the node struct addr
-: btreeStructFromBlockAddr { blockAddr pageNum -- }
+: btreeStructFromBlockAddr { blockAddr pageNum -- structAddr}
     allocateBtreeNode       ( -- structAddr )
     blockAddr               ( structAddr -- structAddr blockAddr )
     pageNum loadBlockIntoStruct     ( structAddr blockAddr pageNum -- )
@@ -150,13 +151,25 @@
 \ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **node);
 \ here, we'll just assume one btree (blockfile) at a time, and so then page
 \ number is just a block number
-: chidb_Btree_getNodeByPage { type pagenum -- btreeNodeAddr)
+: chidb_Btree_getNodeByPage { pagenum -- btreeNodeAddr)
     pagenum btree_blockAddr             ( -- blockAddr)
-    type swap                           ( blockAddr -- type blockAddr)
-    writePageHeader                     ( type blockAddr -- blockAddr )
     pagenum btreeStructFromBlockAddr    ( blockAddr pageNum -- btreeNodeAddr )
 ;
 
-: chidb_Btree_newNode ( type pagenum -- )
-    chidb_Btree_getNodeByPage   ( type pagenum -- type btreeNodeAddr)
+: chidb_Btree_initEmptyNode ( pageType pageNum -- )
+    btree_blockAddr     ( pageType pageNum -- pageType blockAddr )
+    writePageHeader     ( pageType blockAddr -- pageAddr)
+    drop
+;
+
+: chidb_Btree_newNode ( type -- )
+    \ first, incr global numPages variable
+    1 numPages +!               ( type -- type )
+    numPages @                  ( type -- type pageNum )
+    chidb_Btree_initEmptyNode   ( type pageNum -- )
+;
+
+\ take a btree node struct and write to block
+: chidb_Btree_writeNode ( btreeNodeStructAddr -- )
+    
 ;

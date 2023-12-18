@@ -31,7 +31,7 @@ s" btreenodes.fs" required
     thereIsNoFileHeaderInBlock1
     IF
         initializeFileHeader
-        PGTYPE_TABLE_LEAF 1 chidb_Btree_newNode
+        PGTYPE_TABLE_LEAF chidb_Btree_newNode
     ENDIF
 
     save-buffers update flush

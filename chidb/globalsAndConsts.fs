@@ -3,6 +3,9 @@
 Variable pageSize
 1024 pageSize !
 
+Variable numPages
+0 numPages !
+
 \ Type of B-Tree node (PGTYPE_TABLE_INTERNAL, PGTYPE_TABLE_LEAF, PGTYPE_INDEX_INTERNAL, or PGTYPE_INDEX_LEAF)
 \ from spec
 0x05 Constant PGTYPE_TABLE_INTERNAL
