@@ -228,3 +228,16 @@ s" globalsAndConsts.fs" required
     btreeNodeStructAddr writeStructCellsOffsetToBlock
     btreeNodeStructAddr writeStructRightPageToBlock
 ;
+
+\  * Inserts a new cell into a B-Tree node at a specified position ncell.
+\  * This involves the following:
+\  *  1. Add the cell at the top of the cell area. This involves "translating"
+\  *     the BTreeCell into the chidb format (refer to The chidb File Format
+\  *     document for the format of cells).
+\  *  2. Modify cells_offset in BTreeNode to reflect the growth in the cell area.
+\  *  3. Modify the cell offset array so that all values in positions >= ncell
+\  *     are shifted one position forward in the array. Then, set the value of
+\  *     position ncell to be the offset of the newly added cell.
+: chidb_Btree_insertCell ( btreeNodeAddr cellNum cellAddr -- )
+    
+;

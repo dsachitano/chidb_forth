@@ -79,12 +79,14 @@ s" utils.fs" required
     c@
 ;
 
+
+
 : tableCell_internal_setChildPageNum ( val cellAddr -- )
     1 +             \ offset into the struct ( val offsetAddr -- )
     4 writeMultiByteNum
 ;
 
-: tableCell_internal_getChildPageNum ( val cellAddr -- )
+: tableCell_internal_getChildPageNum ( val cellAddr -- pageNum )
     1 +             \ offset into the struct ( val offsetAddr -- )
     4 multiByteNum
 ;
@@ -94,7 +96,27 @@ s" utils.fs" required
     4 writeMultiByteNum
 ;
 
-: tableCell_internal_getKey ( val cellAddr -- )
+: tableCell_internal_getKey ( val cellAddr -- key)
     5 +             \ offset into the struct ( val offsetAddr -- )
     4 multiByteNum
+;
+
+: tableCell_leaf_getRecordSize ( cellAddr -- recordSize)
+    1 +             \ offset into the struct
+    4 multiByteNum
+;
+
+: tableCell_getSize ( cellAddr -- size)
+    dup         ( cellAddr -- cellAddr cellAddr )
+    tableCell_getType   ( cellAddr cellAddr -- cellAddr type)
+    PGTYPE_TABLE_INTERNAL =
+    IF
+        drop
+        9
+    ELSE
+        tableCell_leaf_getRecordSize    ( cellAddr -- recordSize)
+
+        \ there are 9 bytes for the leaf cell (1 type, 4 size, 4 key ) + recordSize 
+        9 +                             ( recordSize -- cellSize)
+    ENDIF
 ;
