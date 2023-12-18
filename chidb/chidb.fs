@@ -7,13 +7,41 @@
 
 \ Step 1: Opening a chidb file
 \ ---------------------------------------------------------------------
+
+\ here, check block 1 to see if there's a file Header or not
+: thereIsNoFileHeaderInBlock1 ( -- bool )
+    1 \ just hard-code to non-zero for now, so we always will write file header
+      \ TODO: actually check the block for a file header in the first 100 bytes 
+;
+
+\ write the fileheader
+: initializeFileHeader ( -- )
+;
+
 \ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
+\ here, we're basically just taking a string in, and passing it to 
+\ open-blocks, which uses the filename in the string as the blockfile
+: chidb_Btree_open ( c-addr u -- )
+    open-blocks
+
+    thereIsNoFileHeaderInBlock1
+    IF
+        initializeFileHeader
+    ENDIF
+;
+
 \ int chidb_Btree_close(BTree *bt);
 \ 
 \ 
 \ Step 2: Loading a B-Tree node from the file
 \ ---------------------------------------------------------------------
 \ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **node);
+\ here, we'll just assume one btree (blockfile) at a time, and so then page
+\ number is just a block number
+: chidb_Btree_getNodeByPage ( pagenum -- )
+    block
+;
+
 \ int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn);
 \
 \ 
