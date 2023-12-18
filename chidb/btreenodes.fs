@@ -279,7 +279,6 @@ s" globalsAndConsts.fs" required
     2 writeMultiByteNum                             ( newCellOffsetVal cellOffsetTargetAddr -- )
     update save-buffers
 
-    \ ." in updateCellOffsetArray: " btreeNodeAddr btree_getCellOffsetArrayPtr 8 dump
 ;
 
 \  * Inserts a new cell into a B-Tree node at a specified position ncell.
@@ -385,8 +384,6 @@ s" globalsAndConsts.fs" required
     +                                           ( -- cellOffsetEntryAddr )
     2 multiByteNum                              ( -- valueOfCellOffset )
 
-    \ dup ." we got the cellOffset: " hex. cr 
-
     btreeNodeAddr btree_getPageNum              ( -- valueOfCellOffset pageNum )
     dup                                         ( -- valueOfCellOffset pageNum pageNum )
     1 =                                         
@@ -402,11 +399,8 @@ s" globalsAndConsts.fs" required
     ENDIF
 
     ( -- addrInBlockOfCell )
-    \ 8 dump
-
 
     \ 2. load the contents of the cell from the page into the bTreeCellAddr
     btreeNodeAddr btree_getPageType     ( addInBlockOfCell -- addInBlockOfCell pageType )
-    \ dup ." Page Type Is: " hex. cr
     bTreeCellAddr loadCellIntoStruct
 ;
